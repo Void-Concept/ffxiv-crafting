@@ -1,5 +1,6 @@
 import fetch from 'node-fetch'
-import {isMultiItem, Material, MaterialPrice, UniversalisItem, UniversalisResponse} from './types'
+import { it } from 'node:test'
+import {GarlandToolsResponse, isMultiItem, ItemCraft, ItemInfo, Material, MaterialPrice, UniversalisItem, UniversalisResponse} from './types'
 
 
 const withQuantity = (material: Omit<Material, 'quantity'>, quantity: number): Material => ({
@@ -12,9 +13,10 @@ const thavnairianAlmandine = {
     name: "Thavnairian Almandine",
     id: 37825,
 }
-const ilmenite = {
+const ilmenite: Material = {
     name: "Ilmenite",
     id: 37820,
+    quantity: 1
 }
 const vanadinite = {
     name: "Vanadinite",
@@ -176,9 +178,9 @@ const getSubPrices = (items: Record<string, UniversalisItem>, components?: Mater
 
     const prices = subPrices.reduce((prev, curr) => ({
         craftPrice: prev.craftPrice + (curr.marketPrice * curr.quantity),
-        minCraftPrice: prev.minCraftPrice + (Math.min(curr.craftPrice || Infinity, curr.marketPrice) * curr.quantity), 
-        craftPriceFromRaw: prev.craftPriceFromRaw + ((curr.craftPriceFromRaw || curr.marketPrice) * curr.quantity),
-        minCraftPriceFromRaw: prev.minCraftPriceFromRaw + (Math.min(curr.craftPriceFromRaw || Infinity, curr.marketPrice) * curr.quantity),
+        minCraftPrice: prev.minCraftPrice + (Math.min(curr.craftPrice || Infinity, curr.minMarketPrice) * curr.quantity), 
+        craftPriceFromRaw: prev.craftPriceFromRaw + ((curr.craftPriceFromRaw || curr.minMarketPrice) * curr.quantity),
+        minCraftPriceFromRaw: prev.minCraftPriceFromRaw + (Math.min(curr.craftPriceFromRaw || Infinity, curr.minMarketPrice) * curr.quantity),
     }), {
         craftPrice: 0,
         minCraftPrice: 0,
@@ -193,19 +195,32 @@ const calculatePrice = (materials: Material[], items: Record<string, Universalis
     return materials.map(material => {
         const itemPrice = items[material.id]
 
+        const isHqItem = !!itemPrice.averagePriceHQ
+
+        const listings = itemPrice.listings
+            .filter(listing => !isHqItem || listing.hq)
+            .map(listing => ({
+                price: listing.pricePerUnit,
+                quantity: listing.quantity, 
+                hq: listing.hq,
+                worldName: listing.worldName
+            }))
+            .slice(0, 5) //TODO: remove if/when UI is added
+
         return {
             ...material,
             components: undefined, // remove components for types
             hq: !!itemPrice.averagePriceHQ,
             marketPrice: itemPrice.averagePriceHQ || itemPrice.averagePriceNQ,
-            ...getSubPrices(items, material.components)
+            minMarketPrice: itemPrice.minPriceHQ || itemPrice.minPriceNQ,
+            ...getSubPrices(items, material.components),
+            listings
         }
     })
 }
 
-const run = async () => {
+const getItemPrices = async (materials: Material[]): Promise<MaterialPrice[]> => {
     const ids = getIds(materials)
-    // console.log(ids)
     const url = `https://universalis.app/api/v2/North-America/${ids.join(',')}`
     const response = await fetch(url)
     const universalisResponse = await response.json() as UniversalisResponse
@@ -213,7 +228,53 @@ const run = async () => {
     const items = getItems(universalisResponse)
 
     const itemPrices = calculatePrice(materials, items)
+    return itemPrices
+} 
+
+const run = async () => {
+    const itemPrices = await getItemPrices([ilmenite])
     console.log(JSON.stringify(itemPrices))
 }
 
-run().catch(console.error)
+// run().catch(console.error)
+
+const lookupItem = async (id: number): Promise<Material> => {
+    const url = `https://garlandtools.org/db/doc/item/en/3/${id}.json`
+    const response = await fetch(url)
+    const itemDescription = await response.json() as GarlandToolsResponse
+
+    return {
+        name: itemDescription.item.name,
+        id: itemDescription.item.id,
+        quantity: 1,
+        components: await createComponents(itemDescription.item),
+    }
+}
+
+const createComponents = async (itemInfo: ItemInfo): Promise<Material[] | undefined> => {
+    if (!itemInfo.craft || itemInfo.craft.length == 0) return undefined
+    if (itemInfo.craft.length > 1) console.warn("More than one craft found for", itemInfo.name, '| only using first')
+
+    const subMaterialPromises = itemInfo.craft[0].ingredients.map(async (ing) => {
+        const subMaterial = await lookupItem(ing.id)
+
+        return withQuantity(subMaterial, ing.amount)
+    })
+    return Promise.all(subMaterialPromises)
+}
+
+const craftItem = async (id: number): Promise<MaterialPrice[]> => {
+    const material = await lookupItem(id)
+
+    return await getItemPrices([material])
+}
+
+const run2 = async () => {
+    const id = 38892
+
+    const prices = await craftItem(id)
+
+    console.log(JSON.stringify(prices))
+}
+
+run2().catch(console.error)
