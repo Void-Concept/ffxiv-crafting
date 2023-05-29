@@ -29,8 +29,6 @@ const createComponents = async (itemInfo: ItemInfo): Promise<Material[] | undefi
     if (!itemInfo.craft || itemInfo.craft.length == 0) return undefined
     if (itemInfo.craft.length > 1) console.warn("More than one craft found for", itemInfo.name, '| only using first')
 
-    console.log(itemInfo)
-
     const subMaterialPromises = itemInfo.craft[0].ingredients.map(async (ing) => {
         const subMaterial = await lookupItem(ing.id)
 

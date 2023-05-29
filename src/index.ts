@@ -33,7 +33,7 @@ const run2 = async () => {
 }
 
 const run3 = async () => {
-    const searchTerm = `Cunning Craftsman D`
+    const searchTerm = `Baked Eggplant`
 
     const prices = await searchItem(searchTerm)
 

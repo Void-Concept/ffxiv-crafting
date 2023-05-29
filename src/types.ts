@@ -14,25 +14,24 @@ export type MaterialListing = {
 }
 
 export type MaterialCraftPrices = {
-    price?: number
-    minPrice?: number
-    priceFromRaw?: number
-    minPriceFromRaw?: number
+    price: number
+    minPrice: number
+    priceFromRaw: number
+    minPriceFromRaw: number
 }
 
 export type MaterialPrice = {
     name: string
     id: number
     quantity: number
+    yield: number
     marketPrice: number
     minMarketPrice: number
+    marketPricePerCraft: number
+    minMarketPricePerCraft: number
     hq: boolean
     craft?: MaterialCraftPrices
     craftPerItem?: MaterialCraftPrices
-    craftPrice?: number
-    minCraftPrice?: number
-    craftPriceFromRaw?: number
-    minCraftPriceFromRaw?: number
     components?: MaterialPrice[]
     listings: MaterialListing[]
 }

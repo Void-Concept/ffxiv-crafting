@@ -1,4 +1,4 @@
-import { Material, MaterialPrice } from "../types"
+import { Material, MaterialCraftPrices, MaterialPrice } from "../types"
 import { isMultiItem, UniversalisItem, UniversalisResponse } from "./types"
 import fetch from 'node-fetch'
 
@@ -49,34 +49,50 @@ const calculatePrice = (materials: Material[], items: Record<string, Universalis
             }))
             .slice(0, 5) //TODO: remove if/when UI is added
 
+        const marketPrice = itemPrice.averagePriceHQ || itemPrice.averagePriceNQ
+        const minMarketPrice = itemPrice.minPriceHQ || itemPrice.minPriceNQ
+
         return {
             ...material,
             components: undefined, // remove components for types
             hq: !!itemPrice.averagePriceHQ,
-            marketPrice: itemPrice.averagePriceHQ || itemPrice.averagePriceNQ,
-            minMarketPrice: itemPrice.minPriceHQ || itemPrice.minPriceNQ,
-            ...getSubPrices(items, material.components),
+            marketPrice,
+            minMarketPrice,
+            marketPricePerCraft: marketPrice * material.yield,
+            minMarketPricePerCraft: minMarketPrice * material.yield,
+            ...getSubPrices(items, material.yield, material.components),
             listings
         }
     })
 }
 
-const getSubPrices = (items: Record<string, UniversalisItem>, components?: Material[]): Partial<MaterialPrice> => {
+const getSubPrices = (items: Record<string, UniversalisItem>, itemYield?: number, components?: Material[]): Partial<MaterialPrice> => {
     if (!components) return {}
  
     const subPrices = calculatePrice(components, items)
 
-    const prices = subPrices.reduce((prev, curr) => ({
-        craftPrice: prev.craftPrice + (curr.marketPrice * curr.quantity),
-        minCraftPrice: prev.minCraftPrice + (Math.min(curr.craftPrice || Infinity, curr.minMarketPrice) * curr.quantity), 
-        craftPriceFromRaw: prev.craftPriceFromRaw + ((curr.craftPriceFromRaw || curr.minMarketPrice) * curr.quantity),
-        minCraftPriceFromRaw: prev.minCraftPriceFromRaw + (Math.min(curr.craftPriceFromRaw || Infinity, curr.minMarketPrice) * curr.quantity),
+    const prices = subPrices.reduce<MaterialCraftPrices>((prev, curr) => ({
+        price: prev.price + (curr.marketPrice * curr.quantity),
+        minPrice: prev.price + (Math.min(curr.craftPerItem?.price || Infinity, curr.minMarketPrice) * curr.quantity), 
+        priceFromRaw: prev.priceFromRaw + ((curr.craftPerItem?.priceFromRaw || curr.minMarketPrice) * curr.quantity),
+        minPriceFromRaw: prev.priceFromRaw + (Math.min(curr.craftPerItem?.priceFromRaw || Infinity, curr.minMarketPrice) * curr.quantity),
     }), {
-        craftPrice: 0,
-        minCraftPrice: 0,
-        craftPriceFromRaw: 0,
-        minCraftPriceFromRaw: 0,
+        price: 0,
+        minPrice: 0,
+        priceFromRaw: 0,
+        minPriceFromRaw: 0,
     })
+
+    const pricePerItem: MaterialCraftPrices = !itemYield ? prices : {
+        price: prices.price / itemYield,
+        minPrice: prices.minPrice / itemYield,
+        priceFromRaw: prices.priceFromRaw / itemYield,
+        minPriceFromRaw: prices.minPriceFromRaw / itemYield,
+    }
  
-    return { ...prices, components: subPrices }
+    return { 
+        craft: prices,
+        craftPerItem: pricePerItem,
+        components: subPrices 
+    }
 }
