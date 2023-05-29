@@ -1,5 +1,4 @@
 import fetch from 'node-fetch'
-import { it } from 'node:test'
 import {GarlandToolsResponse, isMultiItem, ItemCraft, ItemInfo, Material, MaterialPrice, UniversalisItem, UniversalisResponse} from './types'
 
 
@@ -151,6 +150,8 @@ const materials: Material[] = [
     indagatorsPliers,
 ]
 
+const worldsFilter = ['Adamantoise', 'Cactuar', 'Faerie', 'Gilgamesh', 'Jenova', 'Midgardsormr', 'Sargatanas', 'Siren']
+
 const getItems = (response: UniversalisResponse): Record<string, UniversalisItem> => {
     if (isMultiItem(response)) {
         return response.items
@@ -221,7 +222,7 @@ const calculatePrice = (materials: Material[], items: Record<string, Universalis
 
 const getItemPrices = async (materials: Material[]): Promise<MaterialPrice[]> => {
     const ids = getIds(materials)
-    const url = `https://universalis.app/api/v2/North-America/${ids.join(',')}`
+    const url = `https://universalis.app/api/v2/Aether/${ids.join(',')}`
     const response = await fetch(url)
     const universalisResponse = await response.json() as UniversalisResponse
     
@@ -269,12 +270,36 @@ const craftItem = async (id: number): Promise<MaterialPrice[]> => {
     return await getItemPrices([material])
 }
 
+
+const craftItems = async (ids: number[]): Promise<MaterialPrice[]> => {
+    const materials = await Promise.all(ids.map(id => lookupItem(id)))
+
+    return await getItemPrices(materials)
+}
+
+const searchItem = async (searchTerm: string): Promise<MaterialPrice[]> => {
+    const url = `https://garlandtools.org/api/search.php?text=${encodeURIComponent(searchTerm)}&lang=en`
+    const response = await fetch(url)
+    const json = await response.json() as any[] //TODO: type
+    const ids = json.map(item => item.id).map(id => parseInt(id, 10))
+    
+    return await craftItems(ids)
+}
+
 const run2 = async () => {
-    const id = 38892
+    const id = 39677
 
     const prices = await craftItem(id)
 
     console.log(JSON.stringify(prices))
 }
 
-run2().catch(console.error)
+const run3 = async () => {
+    const searchTerm = `Cunning Craftsman D`
+
+    const prices = await searchItem(searchTerm)
+
+    console.log(JSON.stringify(prices))
+}
+
+run3().catch(console.error)
